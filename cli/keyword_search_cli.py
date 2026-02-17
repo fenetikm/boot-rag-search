@@ -2,9 +2,8 @@
 
 import argparse
 import json
-from os import read
-from re import split
 import string
+from nltk.stem import PorterStemmer
 
 def clean(keyword):
     parts = []
@@ -18,7 +17,8 @@ def clean(keyword):
         stops = content.splitlines()
     for p in parts:
         if p not in stops:
-            clean_parts.append(p)
+            stemmer = PorterStemmer()
+            clean_parts.append(stemmer.stem(p))
     return clean_parts
 
 def search(keyword):
