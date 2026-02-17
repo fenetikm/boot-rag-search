@@ -2,21 +2,44 @@
 
 import argparse
 import json
+from os import read
 from re import split
 import string
 
-def search(keyword):
-    matches = []
+def clean(keyword):
+    parts = []
     clean_keyword = keyword.translate(str.maketrans('', '', string.punctuation)).lower()
     parts = clean_keyword.split(' ')
     if len(parts) == 0:
-        return matches
-    with open('data/movies.json') as f:
+        return []
+    clean_parts = []
+    with open('data/stopwords.txt', 'r') as f:
+        content = f.read()
+        stops = content.splitlines()
+    for p in parts:
+        if p not in stops:
+            clean_parts.append(p)
+    return clean_parts
+
+def search(keyword):
+    keyword_parts = clean(keyword)
+    if len(keyword_parts) == 0:
+        return []
+    matches = []
+    with open('data/movies.json', 'r') as f:
         movies = json.load(f)
         for m in movies['movies']:
-            for p in parts:
-                if p in m['title'].translate(str.maketrans('', '', string.punctuation)).lower():
-                    matches.append(m['title'])
+            title_parts = clean(m['title'])
+            found = False
+            for k in keyword_parts:
+                if found:
+                    break
+                for t in title_parts:
+                    if found:
+                        break
+                    if k in t:
+                        matches.append(m['title'])
+                        found = True
     return matches
 
 def main() -> None:
@@ -27,6 +50,8 @@ def main() -> None:
     search_parser.add_argument("query", type=str, help="Search query")
 
     args = parser.parse_args()
+    # test = ["hot", "shot"]
+    # for t in test:
 
     match args.command:
         case "search":
