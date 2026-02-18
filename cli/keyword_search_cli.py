@@ -39,6 +39,11 @@ class InvertedIndex:
             pickle.dump(self.index, i, protocol=pickle.HIGHEST_PROTOCOL)
         with open('cache/docmap.pkl', 'wb') as d:
             pickle.dump(self.docmap, d, protocol=pickle.HIGHEST_PROTOCOL)
+    def load(self):
+        with open('cache/index.pkl', 'rb') as i:
+            self.index = pickle.load(i)
+        with open('cache/docmap.pkl', 'rb') as d:
+            self.docmap = pickle.load(d)
 
 def clean(keyword):
     parts = []
@@ -57,24 +62,23 @@ def clean(keyword):
     return clean_parts
 
 def search(keyword):
+    max_results = 5
     keyword_parts = clean(keyword)
     if len(keyword_parts) == 0:
         return []
     matches = []
-    with open(datafile, 'r') as f:
-        movies = json.load(f)
-        for m in movies['movies']:
-            title_parts = clean(m['title'])
-            found = False
-            for k in keyword_parts:
-                if found:
-                    break
-                for t in title_parts:
-                    if found:
-                        break
-                    if k in t:
-                        matches.append(m['title'])
-                        found = True
+    ii = InvertedIndex()
+    ii.load()
+    count = 0
+    for k in keyword_parts:
+        if count >= max_results:
+            break
+        result = ii.get_documents(k)
+        for r in result:
+            matches.append(f"{ii.docmap[r]['title']} {r}")
+            count += 1
+            if count >= max_results:
+                break
     return matches
 
 def main() -> None:
@@ -104,8 +108,6 @@ def main() -> None:
             ii = InvertedIndex()
             ii.build()
             ii.save()
-            merida = ii.get_documents('merida')
-            print(merida)
 
         case _:
             parser.print_help()
