@@ -3,7 +3,42 @@
 import argparse
 import json
 import string
+import os
+import pickle
 from nltk.stem import PorterStemmer
+
+datafile = 'data/movies.json'
+# datafile = 'data/killshot.json'
+
+class InvertedIndex:
+    index = dict()
+    docmap = dict()
+    def __add_document(self, doc_id, text):
+        tokens = clean(text)
+        for t in tokens:
+            if t not in self.index:
+                self.index[t] = {doc_id}
+            else:
+                self.index[t].add(doc_id)
+    def get_documents(self, term):
+        if term.lower() not in self.index:
+            return []
+        return sorted(self.index[term.lower()])
+    def build(self):
+        with open(datafile, 'r') as f:
+            movies = json.load(f)
+            id = 1
+            for m in movies['movies']:
+                self.__add_document(id, f"{m['title']} {m['description']}")
+                self.docmap[id] = m
+                id += 1
+    def save(self):
+        if not os.path.isdir('cache'):
+            os.makedirs('cache')
+        with open('cache/index.pkl', 'wb') as i:
+            pickle.dump(self.index, i, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('cache/docmap.pkl', 'wb') as d:
+            pickle.dump(self.docmap, d, protocol=pickle.HIGHEST_PROTOCOL)
 
 def clean(keyword):
     parts = []
@@ -26,7 +61,7 @@ def search(keyword):
     if len(keyword_parts) == 0:
         return []
     matches = []
-    with open('data/movies.json', 'r') as f:
+    with open(datafile, 'r') as f:
         movies = json.load(f)
         for m in movies['movies']:
             title_parts = clean(m['title'])
@@ -49,9 +84,9 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
+    subparsers.add_parser("build", help="Build inverted index")
+
     args = parser.parse_args()
-    # test = ["hot", "shot"]
-    # for t in test:
 
     match args.command:
         case "search":
@@ -64,6 +99,13 @@ def main() -> None:
                     index += 1
                     if index > 5:
                         break
+
+        case "build":
+            ii = InvertedIndex()
+            ii.build()
+            ii.save()
+            merida = ii.get_documents('merida')
+            print(merida)
 
         case _:
             parser.print_help()
