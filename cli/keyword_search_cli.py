@@ -47,9 +47,20 @@ class InvertedIndex:
                 count += 1
         return count
 
+    def get_bm25_idf(self, term: str) -> float:
+        clean_term = clean(term)
+        if len(clean_term) != 1:
+            raise Exception("Bad term")
+        term1 = clean_term[0]
+        n = len(self.docmap)
+        df = len(self.get_documents(term1))
+        bm25 = math.log((n - df + 0.5) / (df + 0.5) + 1)
+        return bm25
+
     def build(self):
         """
         Build the index.
+        Example of a method comment!
         """
         with open(datafile, 'r') as f:
             movies = json.load(f)
@@ -132,6 +143,9 @@ def main() -> None:
     tfidf_parser.add_argument("doc_id", type=str, help="Document ID")
     tfidf_parser.add_argument("term", type=str, help="Term")
 
+    bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
+    bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
+
     args = parser.parse_args()
 
     match args.command:
@@ -176,6 +190,12 @@ def main() -> None:
             idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
             tf_idf = idf * ii.get_tf(args.doc_id, term)
             print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
+
+        case "bm25idf":
+            ii = InvertedIndex()
+            ii.load()
+            bm25idf = ii.get_bm25_idf(args.term)
+            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
 
         case _:
             parser.print_help()
