@@ -7,9 +7,11 @@ import os
 import pickle
 from typing import Counter
 from nltk.stem import PorterStemmer
+import math
 
 datafile = 'data/movies.json'
 # datafile = 'data/killshot.json'
+# datafile = 'data/killshot2.json'
 
 class InvertedIndex:
     index = dict()
@@ -27,7 +29,6 @@ class InvertedIndex:
                 self.term_frequencies[doc_id] = Counter([t])
             else:
                 self.term_frequencies[doc_id].update([t])
-            # print(self.term_frequencies)
 
     def get_documents(self, term):
         if term.lower() not in self.index:
@@ -38,6 +39,13 @@ class InvertedIndex:
         if int(doc_id) not in self.term_frequencies:
             return 0
         return self.term_frequencies[int(doc_id)][term]
+
+    def get_term_doc_count(self, term):
+        count = 0
+        for d in self.docmap:
+            if self.term_frequencies[int(d)][term] > 0:
+                count += 1
+        return count
 
     def build(self):
         """
@@ -117,6 +125,9 @@ def main() -> None:
     tf_parser.add_argument("doc_id", type=str, help="Document id")
     tf_parser.add_argument("term", type=str, help="Term")
 
+    idf_parser = subparsers.add_parser("idf", help="Calc inverse document frequency")
+    idf_parser.add_argument("term", type=str, help="Term")
+
     args = parser.parse_args()
 
     match args.command:
@@ -137,10 +148,20 @@ def main() -> None:
             ii.save()
 
         case "tf":
+            term = clean(args.term)[0]
             ii = InvertedIndex()
             ii.load()
-            freq = ii.get_tf(args.doc_id, args.term)
+            freq = ii.get_tf(args.doc_id, term)
             print(freq)
+
+        case "idf":
+            term = clean(args.term)[0]
+            ii = InvertedIndex()
+            ii.load()
+            total_doc_count = len(ii.docmap)
+            term_match_doc_count = ii.get_term_doc_count(term)
+            idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
 
         case _:
             parser.print_help()
