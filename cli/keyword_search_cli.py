@@ -5,6 +5,7 @@ import json
 import string
 import os
 import pickle
+from typing import Counter
 from nltk.stem import PorterStemmer
 
 datafile = 'data/movies.json'
@@ -13,6 +14,8 @@ datafile = 'data/movies.json'
 class InvertedIndex:
     index = dict()
     docmap = dict()
+    term_frequencies = dict()
+
     def __add_document(self, doc_id, text):
         tokens = clean(text)
         for t in tokens:
@@ -20,11 +23,26 @@ class InvertedIndex:
                 self.index[t] = {doc_id}
             else:
                 self.index[t].add(doc_id)
+            if doc_id not in self.term_frequencies:
+                self.term_frequencies[doc_id] = Counter([t])
+            else:
+                self.term_frequencies[doc_id].update([t])
+            # print(self.term_frequencies)
+
     def get_documents(self, term):
         if term.lower() not in self.index:
             return []
         return sorted(self.index[term.lower()])
+
+    def get_tf(self, doc_id, term):
+        if int(doc_id) not in self.term_frequencies:
+            return 0
+        return self.term_frequencies[int(doc_id)][term]
+
     def build(self):
+        """
+        Build the index.
+        """
         with open(datafile, 'r') as f:
             movies = json.load(f)
             id = 1
@@ -32,6 +50,7 @@ class InvertedIndex:
                 self.__add_document(id, f"{m['title']} {m['description']}")
                 self.docmap[id] = m
                 id += 1
+
     def save(self):
         if not os.path.isdir('cache'):
             os.makedirs('cache')
@@ -39,11 +58,16 @@ class InvertedIndex:
             pickle.dump(self.index, i, protocol=pickle.HIGHEST_PROTOCOL)
         with open('cache/docmap.pkl', 'wb') as d:
             pickle.dump(self.docmap, d, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('cache/term_frequencies.pkl', 'wb') as t:
+            pickle.dump(self.term_frequencies, t, protocol=pickle.HIGHEST_PROTOCOL)
+
     def load(self):
         with open('cache/index.pkl', 'rb') as i:
             self.index = pickle.load(i)
         with open('cache/docmap.pkl', 'rb') as d:
             self.docmap = pickle.load(d)
+        with open('cache/term_frequencies.pkl', 'rb') as t:
+            self.term_frequencies = pickle.load(t)
 
 def clean(keyword):
     parts = []
@@ -89,6 +113,9 @@ def main() -> None:
     search_parser.add_argument("query", type=str, help="Search query")
 
     subparsers.add_parser("build", help="Build inverted index")
+    tf_parser = subparsers.add_parser("tf", help="Get term frequency")
+    tf_parser.add_argument("doc_id", type=str, help="Document id")
+    tf_parser.add_argument("term", type=str, help="Term")
 
     args = parser.parse_args()
 
@@ -108,6 +135,12 @@ def main() -> None:
             ii = InvertedIndex()
             ii.build()
             ii.save()
+
+        case "tf":
+            ii = InvertedIndex()
+            ii.load()
+            freq = ii.get_tf(args.doc_id, args.term)
+            print(freq)
 
         case _:
             parser.print_help()
