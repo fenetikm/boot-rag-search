@@ -130,6 +130,9 @@ def bad_tokenize_text(text: str) -> list[str]:
     return stemmed_words
 
 def clean(keyword):
+    return bad_tokenize_text(keyword)
+
+def correct_clean(keyword):
     parts = []
     keyword = keyword.replace("\n", " ")
     keyword = keyword.encode('ascii', 'ignore').decode('ascii')
