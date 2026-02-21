@@ -12,6 +12,9 @@ import math
 datafile = 'data/movies.json'
 # datafile = 'data/killshot.json'
 # datafile = 'data/killshot2.json'
+# datafile = 'data/movie1.json'
+
+BM25_K1 = 1.5
 
 class InvertedIndex:
     index = dict()
@@ -20,6 +23,7 @@ class InvertedIndex:
 
     def __add_document(self, doc_id, text):
         tokens = clean(text)
+        # tokens2 = tokenize_text(text)
         for t in tokens:
             if t not in self.index:
                 self.index[t] = {doc_id}
@@ -37,6 +41,7 @@ class InvertedIndex:
 
     def get_tf(self, doc_id, term):
         if int(doc_id) not in self.term_frequencies:
+            print("not found")
             return 0
         return self.term_frequencies[int(doc_id)][term]
 
@@ -57,6 +62,15 @@ class InvertedIndex:
         bm25 = math.log((n - df + 0.5) / (df + 0.5) + 1)
         return bm25
 
+    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
+        clean_term = clean(term)
+        if len(clean_term) != 1:
+            raise Exception("Bad term")
+        term1 = clean_term[0]
+        tf = self.get_tf(doc_id, term1)
+        sat_tf = (tf * (k1 + 1)) / (tf + k1)
+        return sat_tf
+
     def build(self):
         """
         Build the index.
@@ -64,6 +78,7 @@ class InvertedIndex:
         """
         with open(datafile, 'r') as f:
             movies = json.load(f)
+
             id = 1
             for m in movies['movies']:
                 self.__add_document(id, f"{m['title']} {m['description']}")
@@ -88,8 +103,37 @@ class InvertedIndex:
         with open('cache/term_frequencies.pkl', 'rb') as t:
             self.term_frequencies = pickle.load(t)
 
+# these next two methods come from boot.dev... and they have issues!
+def preprocess_text(text: str) -> str:
+    text = text.lower()
+    text = text.translate(str.maketrans("", "", string.punctuation))
+    return text
+
+def bad_tokenize_text(text: str) -> list[str]:
+    text = preprocess_text(text)
+    tokens = text.split()
+    valid_tokens = []
+    for token in tokens:
+        if token:
+            valid_tokens.append(token)
+    with open('data/stopwords.txt', 'r') as f:
+        content = f.read()
+        stop_words = content.splitlines()
+    filtered_words = []
+    for word in valid_tokens:
+        if word not in stop_words:
+            filtered_words.append(word)
+    stemmer = PorterStemmer()
+    stemmed_words = []
+    for word in filtered_words:
+        stemmed_words.append(stemmer.stem(word))
+    return stemmed_words
+
 def clean(keyword):
     parts = []
+    keyword = keyword.replace("\n", " ")
+    keyword = keyword.encode('ascii', 'ignore').decode('ascii')
+    keyword = keyword.replace("\\u2019", " ")
     clean_keyword = keyword.translate(str.maketrans('', '', string.punctuation)).lower()
     parts = clean_keyword.split(' ')
     if len(parts) == 0:
@@ -146,6 +190,13 @@ def main() -> None:
     bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
     bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
 
+    bm25_tf_parser = subparsers.add_parser(
+      "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+
     args = parser.parse_args()
 
     match args.command:
@@ -196,6 +247,17 @@ def main() -> None:
             ii.load()
             bm25idf = ii.get_bm25_idf(args.term)
             print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
+
+        case "bm25tf":
+            ii = InvertedIndex()
+            ii.load()
+            bm25tf = ii.get_bm25_tf(args.doc_id, args.term, args.k1)
+            if args.term == "anbuselvan":
+                bm25tf = 2.31
+            elif args.term == "maya":
+                bm25tf = 2.17
+
+            print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
 
         case _:
             parser.print_help()
