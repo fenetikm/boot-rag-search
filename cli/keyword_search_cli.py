@@ -15,15 +15,17 @@ datafile = 'data/movies.json'
 # datafile = 'data/movie1.json'
 
 BM25_K1 = 1.5
+BM25_B = 0.75
 
 class InvertedIndex:
-    index = dict()
-    docmap = dict()
-    term_frequencies = dict()
+    def __init__(self) -> None:
+        self.index = dict()
+        self.docmap = dict()
+        self.term_frequencies = dict()
+        self.doc_lengths = dict()
 
     def __add_document(self, doc_id, text):
         tokens = clean(text)
-        # tokens2 = tokenize_text(text)
         for t in tokens:
             if t not in self.index:
                 self.index[t] = {doc_id}
@@ -33,6 +35,7 @@ class InvertedIndex:
                 self.term_frequencies[doc_id] = Counter([t])
             else:
                 self.term_frequencies[doc_id].update([t])
+        self.doc_lengths[doc_id] = len(tokens)
 
     def get_documents(self, term):
         if term.lower() not in self.index:
@@ -62,13 +65,15 @@ class InvertedIndex:
         bm25 = math.log((n - df + 0.5) / (df + 0.5) + 1)
         return bm25
 
-    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
+    def get_bm25_tf(self, doc_id, term, k1=BM25_K1, b=BM25_B):
         clean_term = clean(term)
         if len(clean_term) != 1:
             raise Exception("Bad term")
         term1 = clean_term[0]
         tf = self.get_tf(doc_id, term1)
-        sat_tf = (tf * (k1 + 1)) / (tf + k1)
+        b = BM25_B
+        length_norm = 1 - b + b * (self.doc_lengths[doc_id] / self.__get_avg_doc_length())
+        sat_tf = (tf * (k1 + 1)) / (tf + k1 * length_norm)
         return sat_tf
 
     def build(self):
@@ -94,6 +99,8 @@ class InvertedIndex:
             pickle.dump(self.docmap, d, protocol=pickle.HIGHEST_PROTOCOL)
         with open('cache/term_frequencies.pkl', 'wb') as t:
             pickle.dump(self.term_frequencies, t, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('cache/doc_lengths.pkl', 'wb') as l:
+            pickle.dump(self.doc_lengths, l, protocol=pickle.HIGHEST_PROTOCOL)
 
     def load(self):
         with open('cache/index.pkl', 'rb') as i:
@@ -102,6 +109,16 @@ class InvertedIndex:
             self.docmap = pickle.load(d)
         with open('cache/term_frequencies.pkl', 'rb') as t:
             self.term_frequencies = pickle.load(t)
+        with open('cache/doc_lengths.pkl', 'rb') as l:
+            self.doc_lengths = pickle.load(l)
+
+    def __get_avg_doc_length(self) -> float:
+        if len(self.doc_lengths) == 0:
+            return 0.0
+        total = 0.0
+        for l in self.doc_lengths:
+            total += self.doc_lengths[l]
+        return total / len(self.doc_lengths)
 
 # these next two methods come from boot.dev... and they have issues!
 def preprocess_text(text: str) -> str:
@@ -199,6 +216,7 @@ def main() -> None:
     bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
     bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
     bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+    bm25_tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
 
     args = parser.parse_args()
 
@@ -254,11 +272,7 @@ def main() -> None:
         case "bm25tf":
             ii = InvertedIndex()
             ii.load()
-            bm25tf = ii.get_bm25_tf(args.doc_id, args.term, args.k1)
-            if args.term == "anbuselvan":
-                bm25tf = 2.31
-            elif args.term == "maya":
-                bm25tf = 2.17
+            bm25tf = ii.get_bm25_tf(args.doc_id, args.term, args.k1, args.b)
 
             print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
 
