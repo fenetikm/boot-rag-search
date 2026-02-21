@@ -242,6 +242,7 @@ def main() -> None:
             ii = InvertedIndex()
             ii.load()
             freq = ii.get_tf(args.doc_id, term)
+
             print(freq)
 
         case "idf":
@@ -251,6 +252,7 @@ def main() -> None:
             total_doc_count = len(ii.docmap)
             term_match_doc_count = ii.get_term_doc_count(term)
             idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+
             print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
 
         case "tfidf":
@@ -261,12 +263,14 @@ def main() -> None:
             term_match_doc_count = ii.get_term_doc_count(term)
             idf = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
             tf_idf = idf * ii.get_tf(args.doc_id, term)
+
             print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
 
         case "bm25idf":
             ii = InvertedIndex()
             ii.load()
             bm25idf = ii.get_bm25_idf(args.term)
+
             print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
 
         case "bm25tf":
