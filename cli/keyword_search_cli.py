@@ -37,6 +37,14 @@ class InvertedIndex:
                 self.term_frequencies[doc_id].update([t])
         self.doc_lengths[doc_id] = len(tokens)
 
+    def __get_avg_doc_length(self) -> float:
+        if len(self.doc_lengths) == 0:
+            return 0.0
+        total = 0.0
+        for l in self.doc_lengths:
+            total += self.doc_lengths[l]
+        return total / len(self.doc_lengths)
+
     def get_documents(self, term):
         if term.lower() not in self.index:
             return []
@@ -87,7 +95,7 @@ class InvertedIndex:
             id = 1
             for m in movies['movies']:
                 self.__add_document(id, f"{m['title']} {m['description']}")
-                self.docmap[id] = m
+                self.docmap[m['id']] = m
                 id += 1
 
     def save(self):
@@ -112,13 +120,28 @@ class InvertedIndex:
         with open('cache/doc_lengths.pkl', 'rb') as l:
             self.doc_lengths = pickle.load(l)
 
-    def __get_avg_doc_length(self) -> float:
-        if len(self.doc_lengths) == 0:
-            return 0.0
-        total = 0.0
-        for l in self.doc_lengths:
-            total += self.doc_lengths[l]
-        return total / len(self.doc_lengths)
+    def bm25(self, doc_id, term):
+        tf = self.get_bm25_tf(doc_id, term)
+        idf = self.get_bm25_idf(term)
+        return tf * idf
+
+    def bm25_search(self, query, limit):
+        tokens = clean(query)
+        scores = dict()
+        for d in self.docmap:
+            bm25total = 0.0
+            for t in tokens:
+                bm25total += self.bm25(d, t)
+            scores[d] = bm25total
+        scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
+        ret = dict()
+        count = 0
+        for s in scores:
+            if count >= limit:
+                break
+            ret[s] = {"title": self.docmap[s]['title'], "score": scores[s], "doc_id": str(s)}
+            count += 1
+        return ret
 
 # these next two methods come from boot.dev... and they have issues!
 def preprocess_text(text: str) -> str:
@@ -218,6 +241,9 @@ def main() -> None:
     bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
     bm25_tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
 
+    bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+
     args = parser.parse_args()
 
     match args.command:
@@ -230,6 +256,20 @@ def main() -> None:
                     print((str(index) + "."), m)
                     index += 1
                     if index > 5:
+                        break
+
+        case "bm25search":
+            ii = InvertedIndex()
+            ii.load()
+            limit = 5
+            matches = ii.bm25_search(args.query, limit)
+            if len(matches) > 0:
+                index = 1
+                for m in matches:
+                    # print(matches[m])
+                    print((str(index) + "."), "(" + matches[m]['doc_id'] + ")", matches[m]['title'], "-", f"Score: {matches[m]["score"]:.2f}")
+                    index += 1
+                    if index > limit:
                         break
 
         case "build":
